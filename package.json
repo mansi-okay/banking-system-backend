@@ -1,0 +1,20 @@
+{
+  "name": "banking-system-backend",
+  "version": "1.0.0",
+  "description": "bank transaction system backend",
+  "license": "ISC",
+  "author": "mansi",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "mongoose": "^9.2.4",
+    "nodemon": "^3.1.14"
+  }
+}
