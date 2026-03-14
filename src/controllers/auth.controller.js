@@ -5,7 +5,6 @@ import { User } from "../models/user.model.js"
 import {genAccessAndRefreshTokens} from "../utils/generateTokens.js"
 import { registrationMail } from "../services/email.service.js"
 
-
 /*
 - user register controller
 - POST /api/auth/register
@@ -43,9 +42,6 @@ const userRegisterController = asyncHandler(async(req,res) => {
         sameSite:"strict",
         maxAge:7*24*60*60*1000
     }
-
-    const userr = await User.findById(user._id).select("+refreshToken")
-    console.log(userr.refreshToken)
 
     return res
     .status(200)
