@@ -43,16 +43,20 @@ const createTransaction = asyncHandler(async (req,res) => {
 
     if (existingTransaction){
         if(existingTransaction.status === "COMPLETED"){
-            return new ApiResponse(200,{transaction: existingTransaction},"Transaction already processed")
+            req.status(200)
+            .json(new ApiResponse(200,{transaction: existingTransaction},"Transaction already processed"))
         }
         if(existingTransaction.status === "PENDING"){
-            return new ApiResponse(200,{transactionId: existingTransaction._id},"Transaction still processing")
+            res.status(200)
+            .json(new ApiResponse(200,{transactionId: existingTransaction._id},"Transaction still processing"))
         }
         if(existingTransaction.status === "FAILED"){
-            return new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction already failed")
+            res.status(500)
+            .json(new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction already failed"))
         }
         if(existingTransaction.status === "REVERSED"){
-            return new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction reversed")
+            res.status(500)
+            .json(new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction reversed"))
         }
     }
 
@@ -65,3 +69,5 @@ const createTransaction = asyncHandler(async (req,res) => {
     // derive sender's account balance
  
 })
+
+export {createTransaction}
