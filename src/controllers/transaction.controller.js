@@ -3,15 +3,25 @@ import ApiResponse from "../utils/ApiResponse.js"
 import asyncHandler from "../utils/asyncHandler.js";
 import { Account } from "../models/account.model.js";
 import { Transaction } from "../models/transaction.model.js";
+import mongoose from "mongoose";
+import { Ledger } from "../models/ledger.model.js";
+import { transactionMail } from "../services/email.service.js";
 
+/*
+- transaction creation controller
+- POST /api/transactions/create-transaction
+*/
 const createTransaction = asyncHandler(async (req,res) => {
 
     // validate request 
-
     const {fromAccount,toAccount,amount,idempotencyKey} = req.body
 
     if (!fromAccount?.trim() || !toAccount?.trim() || !amount?.trim() || !idempotencyKey?.trim()) {
         throw new ApiError(400,"All fields(fromAccount, toAccount, amount and idempotencyKey) are required!")
+    }
+
+    if (fromAccount.toString() === toAccount.toString()) {
+        throw new ApiError(400, "Self transfer is not allowed")
     }
 
     const loggedInUser = req.user
@@ -38,35 +48,95 @@ const createTransaction = asyncHandler(async (req,res) => {
     }
 
     // validate idempotency key 
-
     const existingTransaction = await Transaction.findOne({idempotencyKey})
 
     if (existingTransaction){
-        if(existingTransaction.status === "COMPLETED"){
-            req.status(200)
-            .json(new ApiResponse(200,{transaction: existingTransaction},"Transaction already processed"))
-        }
-        if(existingTransaction.status === "PENDING"){
-            res.status(200)
-            .json(new ApiResponse(200,{transactionId: existingTransaction._id},"Transaction still processing"))
-        }
-        if(existingTransaction.status === "FAILED"){
-            res.status(500)
-            .json(new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction already failed"))
-        }
-        if(existingTransaction.status === "REVERSED"){
-            res.status(500)
-            .json(new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction reversed"))
+        switch(existingTransaction.status){
+            case "COMPLETED":
+                return res.status(200).json(
+                new ApiResponse(200,{transaction: existingTransaction},"Transaction already processed")
+            )
+            case "PENDING":
+                return res.status(200).json(
+                new ApiResponse(200,{transactionId: existingTransaction._id},"Transaction still processing")
+            )
+            case "FAILED":
+                return res.status(500).json(
+                new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction already failed")
+            )
+            case "REVERSED":
+                return res.status(500).json(
+                new ApiResponse(500,{transactionId: existingTransaction._id},"Transaction reversed")
+            )
         }
     }
 
     // check account status
-
     if (fromUserAccount.status !== "ACTIVE" || toUserAccount.status !== "ACTIVE") {
         throw new ApiError(400,"Either fromAccount or toAccount is not ACTIVE!!")
     }
 
     // derive sender's account balance
+    const sendersBalance = fromUserAccount.getBalance()
+
+    if (sendersBalance<amount){
+        throw new ApiError(400,"Sender's balance is insufficient")
+    }
+
+    // start mongo db session
+    const session = await mongoose.startSession()
+    session.startTransaction()
+
+    let transaction;
+
+    try {
+        // create transaction (PENDING default)
+        transaction = await Transaction.create({
+            fromAccount,
+            toAccount,
+            amount,
+            idempotencyKey
+        }, {session})
+
+        // create debit ledger 
+        const debitLedgerEntry = await Ledger.create({
+            account:fromAccount,
+            transaction:transaction._id,
+            amount,
+            type:"DEBIT"
+        },{session})
+
+        // create credit ledger 
+        const creditLedgerEntry = await Ledger.create({
+            account:toAccount,
+            transaction:transaction._id,
+            amount,
+            type:"CREDIT"
+        },{session})
+
+        // mark transaction COMPLETED
+        await Transaction.findOneAndUpdate(
+            {_id:transaction._id},
+            {status:"COMPLETED"},
+            {session}
+        )
+
+        // commit mongo db session
+        await session.commitTransaction()
+        session.endSession()
+        
+    } catch (error) {
+        await session.abortTransaction()
+        session.endSession()
+
+        await transactionFailureMail(loggedInUser.email,loggedInUser.name,amount,toAccount)
+        throw error
+    }
+
+    await transactionMail(loggedInUser.email,loggedInUser.name,amount,toAccount)
+
+    return res.status(200)
+    .json(new ApiResponse(200,transaction,"Transactin completed successfully"))
  
 })
 

@@ -20,6 +20,7 @@ const ledgerSchema = new Schema(
         amount: {
             type: Number,
             required:[true, "Amount is required for creating a ledger"],
+            min: [1,"Amount can not be negative"],
             immutable: true
         },
         type: {

@@ -17,7 +17,7 @@ const transactionSchema = new Schema(
         amount: {
             type: Number,
             required:[true,"Amount is a required field"],
-            min: [0,"Amount can not be negative"]
+            min: [1,"Amount can not be negative"]
         },
         status: {
             type: String,
