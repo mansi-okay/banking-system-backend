@@ -1,9 +1,9 @@
 import mongoose,{Schema} from "mongoose";
 
-const accountSchema = Schema(
+const accountSchema = new Schema(
     {
         user: {
-            type: mongoose.Schema.Types.ObjectId,
+            type: Schema.Types.ObjectId,
             ref:"User",
             required: [true, "Account must be linked to a user"],
             index:true
