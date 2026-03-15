@@ -44,4 +44,18 @@ const registrationMail = async(to,name) => {
   await sendEmail(to, subject, text, html);
 }
 
-export {transporter,sendEmail,registrationMail}
+const transactionMail = async(to,name,amount,toAccount) => {
+  const subject = 'TRANSACTION SUCCESSFUL';
+  const text = `Hello ${name},\n\nYour transaction of ₹${amount} to account ${toAccount} was successful.`;
+  const html = `<p>Hello ${name},</p><p>Your transaction of ₹${amount} to account ${toAccount} was successful.</p>`;
+  await sendEmail(to, subject, text, html);
+}
+
+const transactionFaliureMail = async(to,name,amount,toAccount) => {
+  const subject = 'TRANSACTION FALIURE';
+  const text = `Hello ${name},\n\nWe regret to inform you that your transaction of $${amount} to account ${toAccount} has failed. Please try again later.`;
+  const html = `<p>Hello ${name},</p><p>We regret to inform you that your transaction of $${amount} to account ${toAccount} has failed. Please try again later.</p>`;
+  await sendEmail(to, subject, text, html); 
+}
+
+export {transporter,sendEmail,registrationMail,transactionMail,transactionFaliureMail}
