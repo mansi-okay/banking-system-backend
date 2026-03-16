@@ -9,7 +9,7 @@ import { transactionMail } from "../services/email.service.js";
 
 /*
 - transaction creation controller
-- POST /api/transactions/create-transaction
+- POST /api/transactions/
 */
 const createTransaction = asyncHandler(async (req,res) => {
 
@@ -140,6 +140,10 @@ const createTransaction = asyncHandler(async (req,res) => {
  
 })
 
+/*
+- controller for creating initial funds transaction from system user
+- POST /api/transactions/system/initial-funds
+*/
 const createInitialFundsTransaction = asyncHandler(async(req,res) => {
     const {toAccount,amount,idempotencyKey} = req.body
 
@@ -207,5 +211,7 @@ const createInitialFundsTransaction = asyncHandler(async(req,res) => {
     }
 
 })
+
+
 
 export {createTransaction,createInitialFundsTransaction}
