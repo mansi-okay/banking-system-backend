@@ -28,7 +28,7 @@ const userRegisterController = asyncHandler(async(req,res) => {
 
     const user = await User.create(
         {
-            name,email,password        
+            name,email,password,role:"user"      
         }
     )
 
@@ -65,7 +65,7 @@ const userRegisterController = asyncHandler(async(req,res) => {
 - user login controller
 - POST /api/auth/log-in
 */
-const userLoginController = asyncHandler(async (req,res) => {
+const loginController = asyncHandler(async (req,res) => {
     const {email,password} = req.body
 
     if (!email?.trim() || !password?.trim()) {
@@ -105,4 +105,4 @@ const userLoginController = asyncHandler(async (req,res) => {
     ))
 })
 
-export {userRegisterController,userLoginController}
+export {userRegisterController,loginController}

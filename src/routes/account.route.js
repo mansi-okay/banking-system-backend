@@ -1,13 +1,13 @@
 import { Router } from "express";
-import verifyjwt from "../middlewares/auth.middleware.js";
+import {verifyjwt} from "../middlewares/auth.middleware.js";
 import { createAccountController } from "../controllers/account.controller.js";
 
 const accountRouter = Router()
 
 /* 
-- POST /api/accounts/create-account 
+- POST /api/accounts/
 - Protected route
 */
-accountRouter.route("/create-account").post(verifyjwt,createAccountController)
+accountRouter.route("/").post(verifyjwt,createAccountController)
 
 export {accountRouter}
