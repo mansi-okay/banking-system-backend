@@ -5,7 +5,7 @@ import { Account } from "../models/account.model.js";
 import { Transaction } from "../models/transaction.model.js";
 import mongoose from "mongoose";
 import { Ledger } from "../models/ledger.model.js";
-import { transactionMail } from "../services/email.service.js";
+import { transactionMail,transactionFaliureMail } from "../services/email.service.js";
 
 /*
 - transaction creation controller
@@ -22,6 +22,10 @@ const createTransaction = asyncHandler(async (req,res) => {
 
     if (fromAccount.toString() === toAccount.toString()) {
         throw new ApiError(400, "Self transfer is not allowed")
+    }
+
+    if (amount <= 0) {
+        throw new ApiError(400,"Amount must be greater than zero")
     }
 
     const loggedInUser = req.user
@@ -76,61 +80,102 @@ const createTransaction = asyncHandler(async (req,res) => {
         throw new ApiError(400,"Either fromAccount or toAccount is not ACTIVE!!")
     }
 
-    // derive sender's account balance
-    const sendersBalance = fromUserAccount.getBalance()
-
-    if (sendersBalance<amount){
-        throw new ApiError(400,"Sender's balance is insufficient")
-    }
-
     // start mongo db session
     const session = await mongoose.startSession()
-    session.startTransaction()
+    await session.startTransaction()
 
     let transaction;
 
     try {
+
+        // derive sender's account balance
+        const balanceData = await Ledger.aggregate([
+            {
+                $match: {
+                account:fromUserAccount._id}
+            },
+            {
+                $group: {
+                    _id:"$account",
+                    totalCredit: {
+                        $sum: {
+                            $cond: [{ $eq: ["$type", "CREDIT"] },"$amount",0]
+                        }
+                        },
+                    totalDebit: {
+                        $sum: {
+                            $cond: [{ $eq: ["$type", "DEBIT"] },"$amount",0]
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id:0,
+                    balance: {$subtract: ["$totalCredit", "$totalDebit"]}
+                }
+            }
+        ]).session(session)
+        const sendersBalance = balanceData[0]?.balance || 0
+
+        if (sendersBalance<amount){
+            throw new ApiError(400,"Sender's balance is insufficient")
+        }
+
         // create transaction (PENDING default)
-        transaction = await Transaction.create({
+        transaction = (await Transaction.create([{
             fromAccount:fromUserAccount._id,
             toAccount:toUserAccount._id,
             amount,
-            idempotencyKey
-        }, {session})
+            idempotencyKey,
+            status: "PENDING"
+        }], {session}))[0]
 
         // create debit ledger 
-        const debitLedgerEntry = await Ledger.create({
+        await Ledger.create([{
             account:fromUserAccount._id,
             transaction:transaction._id,
             amount,
             type:"DEBIT"
-        },{session})
+        }],{session})
+
+        /*
+        //- Simulate internal server delay
+        await (() => {
+            return new Promise((resolve) => setTimeout(resolve, 15 * 1000));
+        })() */
+        
 
         // create credit ledger 
-        const creditLedgerEntry = await Ledger.create({
+        await Ledger.create([{
             account:toUserAccount._id,
             transaction:transaction._id,
             amount,
             type:"CREDIT"
-        },{session})
+        }],{session})
 
         // mark transaction COMPLETED
-        await Transaction.findOneAndUpdate(
+        transaction = await Transaction.findOneAndUpdate(
             {_id:transaction._id},
             {status:"COMPLETED"},
-            {session}
+            {session, new:true}
         )
 
         // commit mongo db session
         await session.commitTransaction()
-        session.endSession()
         
     } catch (error) {
         await session.abortTransaction()
-        session.endSession()
 
-        await transactionFailureMail(loggedInUser.email,loggedInUser.name,amount,toAccount)
+        if(transaction){
+            await Transaction.findByIdAndUpdate(
+            transaction._id,
+            {status:"FAILED"})
+        }
+        await transactionFaliureMail(loggedInUser.email,loggedInUser.name,amount,toAccount)
         throw error
+    }finally{
+        session.endSession()
     }
 
     await transactionMail(loggedInUser.email,loggedInUser.name,amount,toAccount)
@@ -151,6 +196,10 @@ const createInitialFundsTransaction = asyncHandler(async(req,res) => {
         throw new ApiError(400,"All fields(toAccount, amount and idempotencyKey) are required!")
     }
 
+    if (amount <= 0) {
+        throw new ApiError(400,"Amount must be greater than zero")
+    }
+
     const toUserAccount = await Account.findOne({_id:toAccount})
 
     if(!toUserAccount){
@@ -163,6 +212,21 @@ const createInitialFundsTransaction = asyncHandler(async(req,res) => {
 
     if(!fromUserAccount){
         throw new ApiError(400,"System user account not found")
+    }
+
+    const existingTransaction = await Transaction.findOne({ idempotencyKey })
+    if (existingTransaction) {
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                { transaction: existingTransaction },
+                "Transaction already processed"
+            )
+        )
+    }
+
+    if(toUserAccount.status !== "ACTIVE") {
+        throw new ApiError(400,"Both accounts must be ACTIVE")
     }
 
     const session = await mongoose.startSession()
@@ -181,14 +245,14 @@ const createInitialFundsTransaction = asyncHandler(async(req,res) => {
 
         await transaction.save({ session })
 
-        const debitLedgerEntry = await Ledger.create([{
+        await Ledger.create([{
             account:fromUserAccount._id,
             transaction:transaction._id,
             amount,
             type:"DEBIT"
         }],{session})
 
-        const creditLedgerEntry = await Ledger.create([{
+        await Ledger.create([{
             account:toUserAccount._id,
             transaction:transaction._id,
             amount,
@@ -196,22 +260,20 @@ const createInitialFundsTransaction = asyncHandler(async(req,res) => {
         }],{session})
 
         transaction.status = "COMPLETED"
-        const transactionData = await transaction.save({session})
+        await transaction.save({session})
 
         await session.commitTransaction()
-        session.endSession()
 
         return res.status(200)
-        .json(new ApiResponse(200,{transaction:transactionData},"Initial funds transaction completed successfully"))
+        .json(new ApiResponse(200,{transaction},"Initial funds transaction completed successfully"))
 
     } catch (error) {
         await session.abortTransaction()
-        session.endSession()
         throw error
+    } finally{
+        session.endSession()
     }
 
 })
-
-
 
 export {createTransaction,createInitialFundsTransaction}
