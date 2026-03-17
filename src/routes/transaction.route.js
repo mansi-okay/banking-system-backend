@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {verifyjwt,authorizeRoles} from "../middlewares/auth.middleware.js";
 import {createTransaction,createInitialFundsTransaction} from "../controllers/transaction.controller.js"
+import { transactionLimiter } from "../middlewares/rateLimiter.middleware.js";
 
 const transactionRouter = Router()
 
@@ -8,7 +9,7 @@ const transactionRouter = Router()
 - POST /api/transactions/
 - Create a new transaction
 */
-transactionRouter.route("/").post(verifyjwt,createTransaction)
+transactionRouter.route("/").post(verifyjwt,transactionLimiter,createTransaction)
 
 /*
 - POST /api/transactions/system/initial-funds
