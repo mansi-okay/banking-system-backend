@@ -6,6 +6,7 @@ import {genAccessAndRefreshTokens} from "../utils/generateTokens.js"
 import { registrationMail } from "../services/email.service.js"
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
+import { TokenBlacklist } from "../models/tokenBlacklist.model.js"
 
 /*
 - user register controller
@@ -154,4 +155,35 @@ const refreshAccessToken = asyncHandler(async(req,res) => {
     }
 })
 
-export {userRegisterController,loginController,refreshAccessToken}
+/* 
+- Controller for logging out user and blacklist access token
+- POST /api/auth/log-out 
+*/
+const logOut = asyncHandler(async(req,res) => {
+    const fetchedAccessToken = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "")
+
+    if (!fetchedAccessToken){throw new ApiError(400,"User logged out")}
+
+    await TokenBlacklist.create({token:fetchedAccessToken})
+
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $unset: {refreshToken: 1 }
+        }
+    )
+
+    const options = {
+        httpOnly:true,
+        secure:true,
+        sameSite:"strict"
+    }
+
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged Out"))
+})
+
+export {userRegisterController,loginController,refreshAccessToken,logOut}

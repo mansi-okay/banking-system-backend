@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken"
 import asyncHandler from "../utils/asyncHandler.js"
 import ApiError from "../utils/ApiError.js"
 import { User } from "../models/user.model.js"
+import { TokenBlacklist } from "../models/tokenBlacklist.model.js"
 
 const verifyjwt = asyncHandler(async(req,res,next) => {
     try {
@@ -10,6 +11,10 @@ const verifyjwt = asyncHandler(async(req,res,next) => {
         if (!token){
             throw new ApiError(400,"Unauthorised request!!")
         }
+
+        const tokenBlacklisted = await TokenBlacklist.findOne({ token })
+
+        if(tokenBlacklisted){ throw new ApiError(401,"Access token blacklisted")}
     
         const decodedPayload = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET)
     

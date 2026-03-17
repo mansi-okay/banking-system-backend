@@ -1,5 +1,5 @@
 import { Router } from "express";
-import {userRegisterController,loginController,refreshAccessToken} from "../controllers/auth.controller.js"
+import {userRegisterController,loginController,refreshAccessToken,logOut} from "../controllers/auth.controller.js"
 import { verifyjwt } from "../middlewares/auth.middleware.js";
 
 const authRouter = Router()
@@ -15,5 +15,10 @@ authRouter.route("/log-in").post(loginController)
 - Refresh token rotation
 */
 authRouter.route("/refresh-token").post(refreshAccessToken)
+
+/* 
+- POST /api/auth/log-out 
+*/
+authRouter.route("/log-out").post(verifyjwt,logOut)
 
 export {authRouter}
